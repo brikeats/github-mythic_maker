@@ -1,0 +1,4 @@
+[Keys]
+# Expects API_V3 and API_V4
+API_V3 = foo
+API_V4 = bar
