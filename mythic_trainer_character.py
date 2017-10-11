@@ -131,11 +131,11 @@ if __name__ == '__main__':
         log.out.info("Loss history:")
         log.out.info(",".join(map(str, all_losses)))
         log.out.info("Saving model.")
-        save()
+        save('model_checkpoint.dat')
 
     except KeyboardInterrupt:
         log.out.info("Saving model before quit.")
-        save()
+        save('model_checkpoint.dat')
 
     # Shut down and clean up
     total_time = round((time.time() - start_time), 0)
