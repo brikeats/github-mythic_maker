@@ -39,6 +39,26 @@ def random_training_set():
     return inp, target
 
 
+def ordered_training_set(start_index):
+    if start_index > (settings.text_length - settings.chunk_size):
+        log.out.warning("Requested index would blow bounds in text array, setting to random.")
+        start_index = random.randint(0, settings.text_length - settings.chunk_size)
+    inp = model.torch.LongTensor(settings.batch_size, settings.chunk_size)
+    target = model.torch.LongTensor(settings.batch_size, settings.chunk_size)
+    for bi in range(settings.batch_size):
+        # start_index = random.randint(0, settings.text_length - settings.chunk_size)
+        end_index = start_index + settings.chunk_size + 1
+        chunk = settings.text_string[start_index:end_index]
+        inp[bi] = common.char_tensor(chunk[:-1])
+        target[bi] = common.char_tensor(chunk[1:])
+    inp = model.Variable(inp)
+    target = model.Variable(target)
+    if settings.cuda:
+        inp = inp.cuda()
+        target = target.cuda()
+    return inp, target, end_index
+
+
 def train(input_pattern, target):
     hidden = decoder.init_hidden(settings.batch_size)
     if settings.cuda:
@@ -53,11 +73,7 @@ def train(input_pattern, target):
     return this_loss.data[0] / settings.chunk_size
 
 
-def save():
-    if settings.model_file is None:
-        save_filename = os.path.splitext(os.path.basename(settings.text_file))[0] + '.pt'
-    else:
-        save_filename = settings.model_file
+def save(save_filename):
     model.torch.save(decoder, save_filename)
     log.out.info("Saved as:" + save_filename)
 
@@ -77,7 +93,14 @@ if __name__ == '__main__':
         log.out.info("Using CUDA")
     else:
         log.out.info("Using CPU")
+    if settings.model_file is None:
+        save_filename = os.path.splitext(os.path.basename(settings.text_file))[0] + '.pt'
+    else:
+        save_filename = settings.model_file
+    settings.report()
 
+    log.out.info("Read text data from: " + settings.text_file)
+    log.out.info("Found " + str(settings.text_length) + " characters.")
     # Initialize models and start training
     decoder = model.CharRNN(
         common.num_characters,
@@ -97,7 +120,6 @@ if __name__ == '__main__':
     all_losses = []
     loss_avg = 0
     try:
-        print("Training for %d epochs..." % settings.epochs)
         for epoch in tqdm(range(1, settings.epochs + 1)):
             loss = train(*random_training_set())
             loss_avg += loss
@@ -112,7 +134,7 @@ if __name__ == '__main__':
         save()
 
     except KeyboardInterrupt:
-        print("Saving model before quit.")
+        log.out.info("Saving model before quit.")
         save()
 
     # Shut down and clean up

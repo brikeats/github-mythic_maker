@@ -10,14 +10,12 @@ import sys
 import psutil
 import argparse
 from string import printable
-import json
 import numpy as np
 import unidecode
 import string
 import time
 import math
 import torch
-import random
 
 
 model_file_name_pattern = "mythic_model-EE-WWWWWW_XS1_XS2_YS1_LS1"
@@ -39,7 +37,7 @@ class TrainerSettings:
     hidden_size = None
     layers = None
     learning_rate = None
-    chunk_len = None
+    chunk_size = None
     batch_size = None
 
     def __init__(self):
@@ -49,6 +47,20 @@ class TrainerSettings:
         self.__args_to_config()
         if self.text_file is not None:
             self.text_string, self.text_length = read_file_as_string(self.text_file)
+
+    def report(self):
+        log.out.info("Settings:" + "\n" +
+                     "text_file    : " + str(self.text_file) + "\n" +
+                     "model_file   : " + str(self.model_file) + "\n" +
+                     "model        : " + str(self.model) + "\n" +
+                     "epochs       : " + str(self.epochs) + "\n" +
+                     "chunk_size   : " + str(self.chunk_size) + "\n" +
+                     "batch_size   : " + str(self.batch_size) + "\n" +
+                     "hidden_size  : " + str(self.hidden_size) + "\n" +
+                     "layers       : " + str(self.layers) + "\n" +
+                     "learning_rate: " + str(self.learning_rate) + "\n" +
+                     "print_every  : " + str(self.print_every)
+                     )
 
     def __args_to_config(self):
         """
@@ -261,7 +273,7 @@ def char_tensor(input_string):
     tensor = torch.zeros(len(input_string)).long()
     for c in range(len(input_string)):
         try:
-            tensor[c] = all_characters.index(input_string[c])
+            tensor[c] = trainable_characters.index(input_string[c])
         except:
             continue
     return tensor
