@@ -1,7 +1,9 @@
 """
-This script trains the  model
+This script trains a character level RNN (LSTM) model
 
 Usage:
+python mythic_trainer_character.py --text_file ./DATA/foo.txt --print_every 100 --epochs 2000
+
 
 @author: Brad Beechler (brad.e.beechler@gmail.com)
 # Last Modification: 09/20/2017 (Brad Beechler)
@@ -21,12 +23,12 @@ settings = common.MythicSettings()
 
 
 def random_training_set():
-    inp = model.torch.LongTensor(settings.batch_size, settings.chunk_len)
-    target = model.torch.LongTensor(settings.batch_size, settings.chunk_len)
+    inp = model.torch.LongTensor(settings.batch_size, settings.chunk_size)
+    target = model.torch.LongTensor(settings.batch_size, settings.chunk_size)
     for bi in range(settings.batch_size):
-        start_index = random.randint(0, settings.file_len - settings.chunk_len)
-        end_index = start_index + settings.chunk_len + 1
-        chunk = settings.file[start_index:end_index]
+        start_index = random.randint(0, settings.text_length - settings.chunk_size)
+        end_index = start_index + settings.chunk_size + 1
+        chunk = settings.text_string[start_index:end_index]
         inp[bi] = common.char_tensor(chunk[:-1])
         target[bi] = common.char_tensor(chunk[1:])
     inp = model.Variable(inp)
@@ -43,18 +45,21 @@ def train(input_pattern, target):
         hidden = hidden.cuda()
     decoder.zero_grad()
     this_loss = 0
-    for c in range(settings.chunk_len):
+    for c in range(settings.chunk_size):
         output, hidden = decoder(input_pattern[:, c], hidden)
         this_loss += criterion(output.view(settings.batch_size, -1), target[:, c])
     this_loss.backward()
     decoder_optimizer.step()
-    return this_loss.data[0] / settings.chunk_len
+    return this_loss.data[0] / settings.chunk_size
 
 
 def save():
-    save_filename = os.path.splitext(os.path.basename(settings.filename))[0] + '.pt'
+    if settings.model_file is None:
+        save_filename = os.path.splitext(os.path.basename(settings.text_file))[0] + '.pt'
+    else:
+        save_filename = settings.model_file
     model.torch.save(decoder, save_filename)
-    log.out.info('Saved as %s' % save_filename)
+    log.out.info("Saved as:" + save_filename)
 
 
 if __name__ == '__main__':
@@ -99,7 +104,7 @@ if __name__ == '__main__':
                 percent_done = epoch / settings.epochs * 100
                 log.out.info('[%s (%d%%) %.4f]' % (common.time_since(start_time), percent_done, loss))
                 log.out.info("\n" + writer.generate(decoder, 'Wh', 100, cuda=settings.cuda))
-        log.out.info("Loss pattern:")
+        log.out.info("Loss history:")
         log.out.info(",".join(map(str, all_losses)))
         log.out.info("Saving model.")
         save()

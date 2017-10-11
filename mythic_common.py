@@ -26,10 +26,10 @@ num_characters = len(all_characters)
 
 
 class MythicSettings:
+    # For trainer
     args = None
     debug = False
-    raw_text_filename = None
-    filename = None
+    text_file = None
     model = None
     epochs = None
     print_every = None
@@ -39,73 +39,86 @@ class MythicSettings:
     chunk_len = None
     batch_size = None
     cuda = False
+    # For writer
+    model_file = None
+    seed_string = None
+    predict_length = None
+    temperature = False
 
     def __init__(self):
         # Read the command line
         self.__get_command_line()
         # Add the command line info into the config dict
         self.__args_to_config()
-        self.file, self.file_len = read_file(self.filename)
+        if self.text_file is not None:
+            self.text_string, self.text_length = read_file_as_string(self.text_file)
 
     def __args_to_config(self):
         """
         Takes the argparse object and puts the values into this object
         (there's probably a way better way to do this BTW)
         """
+        # General
         self.debug = self.args.debug
-        self.raw_text_filename = self.args.rawtext
-        self.filename = self.args.filename
+        self.cuda = self.args.cuda
+        self.model_file = self.args.model_file
+
+        # For trainer
+        self.text_file = self.args.text_file
         self.model = self.args.model
         self.epochs = self.args.epochs
         self.print_every = self.args.print_every
         self.hidden_size = self.args.hidden_size
         self.layers = self.args.layers
         self.learning_rate = self.args.learning_rate
-        self.chunk_len = self.args.chunk_len
+        self.chunk_size = self.args.chunk_size
         self.batch_size = self.args.batch_size
-        self.cuda = self.args.cuda
+        # For writer
+        self.seed_string = self.args.seed_string
+        self.predict_length = self.args.predict_length
+        self.temperature = self.args.temperature
+
 
     def __get_command_line(self):
         """
         Get command line information using the argparse module
         """
+        # General
         ap = argparse.ArgumentParser(description='Does cool stuff!')
         ap.add_argument('--debug', dest='debug', action='store_true',
                         help='Switch to activate debug mode.')
         ap.set_defaults(debug=False)
-        ap.add_argument('--rawtext', '-r', type=str,
-                        help='Raw data file (ascii text)', required=False)
-
-        ap.add_argument('--filename', type=str,
-                        help='RAW DATA', required=False)
-        ap.add_argument('--model', type=str, default="gru",
-                        help='Model type', required=False)
-        ap.add_argument('--epochs', type=int, default=2000,
-                        help='Number of epochs to run for', required=False)
-        ap.add_argument('--print_every', type=int, default=100,
-                        help='Print results every n epochs', required=False)
-        ap.add_argument('--hidden_size', type=int, default=100,
-                        help='Number of hidden layers', required=False)
-        ap.add_argument('--layers', type=int, default=2,
-                        help='Number of layers', required=False)
-        ap.add_argument('--learning_rate', type=float, default=0.01,
-                        help='The learning rate', required=False)
-        ap.add_argument('--chunk_len', type=int, default=200,
-                        help='Chunk size', required=False)
-        ap.add_argument('--batch_size', type=int, default=100,
-                        help='Batch size', required=False)
         ap.add_argument('--cuda', dest='cuda', action='store_true',
                         help='Switch to activate CUDA support.')
         ap.set_defaults(cuda=False)
-
+        ap.add_argument('--model_file', type=str, default=None,
+                        help='Torch model filename (foo.pt)', required=False)
+        # For the trainer
+        ap.add_argument('--text_file', type=str, default=None,
+                        help='TRAIN: Raw data file (ascii text)', required=False)
+        ap.add_argument('--model', type=str, default="gru",
+                        help='TRAIN: Model type', required=False)
+        ap.add_argument('--epochs', type=int, default=2000,
+                        help='TRAIN: Number of epochs to run for', required=False)
+        ap.add_argument('--print_every', type=int, default=100,
+                        help='TRAIN: Print results every n epochs', required=False)
+        ap.add_argument('--hidden_size', type=int, default=100,
+                        help='TRAIN: Number of hidden layers', required=False)
+        ap.add_argument('--layers', type=int, default=2,
+                        help='TRAIN: Number of layers', required=False)
+        ap.add_argument('--learning_rate', type=float, default=0.01,
+                        help='TRAIN: The learning rate', required=False)
+        ap.add_argument('--chunk_size', type=int, default=200,
+                        help='TRAIN: Chunk size', required=False)
+        ap.add_argument('--batch_size', type=int, default=100,
+                        help='TRAIN: Batch size', required=False)
         # For the writer
-        ap.add_argument('-s', '--init_string', type=str, default='A',
-                        help='Initial seed string', required=False)
-        ap.add_argument('-l', '--predict_length', type=int, default=100,
-                        help='Length of the prediction', required=False)
-        ap.add_argument('-t', '--temperature', type=float, default=0.8,
-                        help='Temperature setting (higher is more random)', required=False)
-
+        ap.add_argument('--seed_string', type=str, default='A',
+                        help='WRITE: Initial seed string', required=False)
+        ap.add_argument('--predict_length', type=int, default=100,
+                        help='WRITE: Length of the prediction', required=False)
+        ap.add_argument('--temperature', type=float, default=0.8,
+                        help='WRITE: Temperature setting (higher is more random)', required=False)
 
         self.args = ap.parse_args()
 
@@ -119,7 +132,7 @@ def report_sys_info():
     log.out.info("Memory available: " + str(round(float(psutil.virtual_memory().available) / 2 ** 30, 2)) + "GB")
 
 
-def read_movie_info(filename, key="title", sample=None):
+def read_movie_json(filename, key="title", sample=None):
     log.out.info("Opening: " + filename)
     json_file_handle = open(filename)
     movie_data = json.load(json_file_handle)
@@ -165,55 +178,14 @@ def clean_string_to_printable(string_in, lower=True):
     return string_out
 
 
-# def prepare_nonsense(movie_overview_array, pattern_size=None):
-#     movie_info_raw = munge_huge_clump(movie_overview_array)
-#     # Create mapping of printable chars to integers
-#     sorted_chars = sorted(list(set(printable.lower())))
-#     log.out.info("Cleaning data of weird characters.")
-#     movie_info_clean = clean_string_to_printable(movie_info_raw)
-#     median_overview_length = get_median_length(movie_overview_array)
-#     log.out.info("Median overview length: " + str(median_overview_length))
-#     char_to_int = dict((c, i) for i, c in enumerate(sorted_chars))
-#     num_chars = len(movie_info_clean)
-#     num_vocab = len(sorted_chars)
-#     log.out.info("Total characters: " + str(num_chars) +
-#                  " Total vocabulary: " + str(num_vocab))
-#
-#     # Prepare the dataset of input to output pairs encoded as integers
-#     if pattern_size is None:
-#         pattern_size = int(median_overview_length / 2)
-#
-#     log.out.info("Training with sequence length: characters: " + str(pattern_size))
-#     data_x = []
-#     data_y = []
-#     for i in tqdm(range(0, num_chars - pattern_size, 1)):
-#         seq_in = movie_info_clean[i:i + pattern_size]
-#         seq_out = movie_info_clean[i + pattern_size]
-#         data_x.append([char_to_int[char] for char in seq_in])
-#         data_y.append(char_to_int[seq_out])
-#         num_patterns = len(data_x)
-#     log.out.info("Total Patterns: " + str(num_patterns))
-#
-#     # Reshape for keras LSTM. 'vecs' is in the form: [samples, time steps, features]
-#     vec_x = np.reshape(data_x, (num_patterns, pattern_size, 1))
-#     # Normalize the vectors
-#     vec_x = vec_x / float(num_vocab)
-#     # One-hot encode the output variable
-#     # (Encodes text into a list of word indexes in a vocabulary of size n)
-#     # TODO this can blow memory on the GPU
-#     # IDEA: word_to_vec gensym
-#     vec_y = np_utils.to_categorical(data_y)
-#     return data_x, vec_x, vec_y, sorted_chars
-
-
-def read_file(filename):
+def read_file_as_string(filename):
     """
     Open a file and returns its handle and length
     :param filename:
     :return:
     """
-    file = unidecode.unidecode(open(filename).read())
-    return file, len(file)
+    text_str = unidecode.unidecode(open(filename).read())
+    return text_str, len(text_str)
 
 
 def char_tensor(input_string):
@@ -240,3 +212,17 @@ def time_since(start_time):
     m = math.floor(s / 60)
     s -= m * 60
     return '%dm %ds' % (m, s)
+
+# def prepare_nonsense(movie_overview_array, pattern_size=None):
+#     movie_info_raw = munge_huge_clump(movie_overview_array)
+#     # Create mapping of printable chars to integers
+#     sorted_chars = sorted(list(set(printable.lower())))
+#     log.out.info("Cleaning data of weird characters.")
+#     movie_info_clean = clean_string_to_printable(movie_info_raw)
+#     median_overview_length = get_median_length(movie_overview_array)
+#     log.out.info("Median overview length: " + str(median_overview_length))
+#     char_to_int = dict((c, i) for i, c in enumerate(sorted_chars))
+#     num_chars = len(movie_info_clean)
+#     num_vocab = len(sorted_chars)
+#     log.out.info("Total characters: " + str(num_chars) +
+#                  " Total vocabulary: " + str(num_vocab))
