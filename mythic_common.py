@@ -21,8 +21,8 @@ import random
 
 
 model_file_name_pattern = "mythic_model-EE-WWWWWW_XS1_XS2_YS1_LS1"
-all_characters = string.printable
-num_characters = len(all_characters)
+trainable_characters = string.printable
+num_characters = len(trainable_characters)
 
 
 class TrainerSettings:

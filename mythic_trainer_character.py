@@ -86,7 +86,9 @@ if __name__ == '__main__':
         model=settings.model,
         n_layers=settings.layers,
     )
+    # Set the optimizer
     decoder_optimizer = model.torch.optim.Adam(decoder.parameters(), lr=settings.learning_rate)
+    # Set the loss function (criterion)
     criterion = model.nn.CrossEntropyLoss()
 
     if settings.cuda:

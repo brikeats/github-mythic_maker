@@ -36,7 +36,7 @@ def generate(decoder, seed_string='A', predict_length=100, temperature=0.8, cuda
         top_i = torch.multinomial(output_dist, 1)[0]
 
         # Add predicted character to string and use as next input
-        predicted_char = common.all_characters[top_i]
+        predicted_char = common.trainable_characters[top_i]
         predicted += predicted_char
         inp = mythic_model_character.Variable(common.char_tensor(predicted_char).unsqueeze(0))
         if cuda:
