@@ -25,10 +25,13 @@ all_characters = string.printable
 num_characters = len(all_characters)
 
 
-class MythicSettings:
-    # For trainer
+class TrainerSettings:
+    # General
     args = None
     debug = False
+    cuda = False
+    model_file = None
+    # For trainer
     text_file = None
     model = None
     epochs = None
@@ -38,12 +41,6 @@ class MythicSettings:
     learning_rate = None
     chunk_len = None
     batch_size = None
-    cuda = False
-    # For writer
-    model_file = None
-    seed_string = None
-    predict_length = None
-    temperature = False
 
     def __init__(self):
         # Read the command line
@@ -62,7 +59,6 @@ class MythicSettings:
         self.debug = self.args.debug
         self.cuda = self.args.cuda
         self.model_file = self.args.model_file
-
         # For trainer
         self.text_file = self.args.text_file
         self.model = self.args.model
@@ -73,6 +69,69 @@ class MythicSettings:
         self.learning_rate = self.args.learning_rate
         self.chunk_size = self.args.chunk_size
         self.batch_size = self.args.batch_size
+
+    def __get_command_line(self):
+        """
+        Get command line information using the argparse module
+        """
+        # General
+        ap = argparse.ArgumentParser(description='Trains models in torch framework.')
+        ap.add_argument('--debug', dest='debug', action='store_true',
+                        help='Switch to activate debug mode.')
+        ap.set_defaults(debug=False)
+        ap.add_argument('--cuda', dest='cuda', action='store_true',
+                        help='Switch to activate CUDA support.')
+        ap.set_defaults(cuda=False)
+        ap.add_argument('--model_file', type=str, default=None,
+                        help='Torch model filename (foo.pt)', required=False)
+        # For the trainer
+        ap.add_argument('--text_file', type=str, default=None,
+                        help='Raw data file (ascii text)', required=True)
+        ap.add_argument('--model', type=str, default="gru",
+                        help='Model type', required=False)
+        ap.add_argument('--epochs', type=int, default=2000,
+                        help='Number of epochs to run for', required=False)
+        ap.add_argument('--print_every', type=int, default=100,
+                        help='Print results every n epochs', required=False)
+        ap.add_argument('--hidden_size', type=int, default=100,
+                        help='Number of hidden layers', required=False)
+        ap.add_argument('--layers', type=int, default=2,
+                        help='Number of layers', required=False)
+        ap.add_argument('--learning_rate', type=float, default=0.01,
+                        help='The learning rate', required=False)
+        ap.add_argument('--chunk_size', type=int, default=200,
+                        help='Chunk size', required=False)
+        ap.add_argument('--batch_size', type=int, default=100,
+                        help='Batch size', required=False)
+        self.args = ap.parse_args()
+
+
+class WriterSettings:
+    # General
+    args = None
+    debug = False
+    cuda = False
+    model_file = None
+    # For writer
+    seed_string = None
+    predict_length = None
+    temperature = False
+
+    def __init__(self):
+        # Read the command line
+        self.__get_command_line()
+        # Add the command line info into the config dict
+        self.__args_to_config()
+
+    def __args_to_config(self):
+        """
+        Takes the argparse object and puts the values into this object
+        (there's probably a way better way to do this BTW)
+        """
+        # General
+        self.debug = self.args.debug
+        self.cuda = self.args.cuda
+        self.model_file = self.args.model_file
         # For writer
         self.seed_string = self.args.seed_string
         self.predict_length = self.args.predict_length
@@ -84,7 +143,7 @@ class MythicSettings:
         Get command line information using the argparse module
         """
         # General
-        ap = argparse.ArgumentParser(description='Does cool stuff!')
+        ap = argparse.ArgumentParser(description='Writes outputs from trained models.')
         ap.add_argument('--debug', dest='debug', action='store_true',
                         help='Switch to activate debug mode.')
         ap.set_defaults(debug=False)
@@ -92,34 +151,68 @@ class MythicSettings:
                         help='Switch to activate CUDA support.')
         ap.set_defaults(cuda=False)
         ap.add_argument('--model_file', type=str, default=None,
-                        help='Torch model filename (foo.pt)', required=False)
-        # For the trainer
-        ap.add_argument('--text_file', type=str, default=None,
-                        help='TRAIN: Raw data file (ascii text)', required=False)
-        ap.add_argument('--model', type=str, default="gru",
-                        help='TRAIN: Model type', required=False)
-        ap.add_argument('--epochs', type=int, default=2000,
-                        help='TRAIN: Number of epochs to run for', required=False)
-        ap.add_argument('--print_every', type=int, default=100,
-                        help='TRAIN: Print results every n epochs', required=False)
-        ap.add_argument('--hidden_size', type=int, default=100,
-                        help='TRAIN: Number of hidden layers', required=False)
-        ap.add_argument('--layers', type=int, default=2,
-                        help='TRAIN: Number of layers', required=False)
-        ap.add_argument('--learning_rate', type=float, default=0.01,
-                        help='TRAIN: The learning rate', required=False)
-        ap.add_argument('--chunk_size', type=int, default=200,
-                        help='TRAIN: Chunk size', required=False)
-        ap.add_argument('--batch_size', type=int, default=100,
-                        help='TRAIN: Batch size', required=False)
+                        help='Torch model filename (foo.pt)', required=True)
         # For the writer
         ap.add_argument('--seed_string', type=str, default='A',
-                        help='WRITE: Initial seed string', required=False)
-        ap.add_argument('--predict_length', type=int, default=100,
-                        help='WRITE: Length of the prediction', required=False)
+                        help='Initial seed string', required=False)
+        ap.add_argument('--predict_length', type=int, default=200,
+                        help='Length of the prediction', required=False)
         ap.add_argument('--temperature', type=float, default=0.8,
-                        help='WRITE: Temperature setting (higher is more random)', required=False)
+                        help='Temperature setting (higher is more random)', required=False)
+        self.args = ap.parse_args()
 
+
+class ExtractorSettings:
+    # General
+    args = None
+    debug = False
+    # Extractor specific
+    type = None
+
+    def __init__(self):
+        # Read the command line
+        self.__get_command_line()
+        # Add the command line info into the config dict
+        self.__args_to_config()
+
+    def __args_to_config(self):
+        """
+        Takes the argparse object and puts the values into this object
+        (there's probably a way better way to do this BTW)
+        """
+        # General
+        self.debug = self.args.debug
+        # Extractor specific
+        self.type = self.args.type
+        self.data_file = self.args.data_file
+        self.out_file = self.args.out_file
+        self.samples = self.args.samples
+        self.key = self.args.key
+        self.clean = self.args.clean
+
+    def __get_command_line(self):
+        """
+        Get command line information using the argparse module
+        """
+        # General
+        ap = argparse.ArgumentParser(description='Extracts text files from various data formats.')
+        ap.add_argument('--debug', dest='debug', action='store_true',
+                        help='Switch to activate debug mode.')
+        ap.set_defaults(debug=False)
+        # Extractor specific
+        ap.add_argument('--type', type=str, default=None,
+                        help='Type of extraction (i.e. json, mbox)', required=True)
+        ap.add_argument('--data_file', type=str, default=None,
+                        help='Filename to extract from.', required=True)
+        ap.add_argument('--out_file', type=str, default='./extracted.txt',
+                        help='Filename to write text to.', required=False)
+        ap.add_argument('--samples', type=int, default=None,
+                        help='Number of samples to grab.', required=False)
+        ap.add_argument('--key', type=str, default=None,
+                        help='Specify a key (for json).', required=False)
+        ap.add_argument('--clean', dest='clean', action='store_true',
+                        help='Switch to clean data.')
+        ap.set_defaults(clean=False)
         self.args = ap.parse_args()
 
 
@@ -132,39 +225,10 @@ def report_sys_info():
     log.out.info("Memory available: " + str(round(float(psutil.virtual_memory().available) / 2 ** 30, 2)) + "GB")
 
 
-def read_movie_json(filename, key="title", sample=None):
-    log.out.info("Opening: " + filename)
-    json_file_handle = open(filename)
-    movie_data = json.load(json_file_handle)
-    log.out.info("Found: " + str(len(movie_data)) + " records.")
-    movie_ids = list(movie_data.keys())
-    log.out.info("Parsing records.")
-    return_array = []
-    if sample is not None:
-        # Get a random subset
-        for i in range(sample):
-            rando = movie_ids[random.randint(0, len(movie_data)-1)]
-            return_array.append(movie_data[rando][key])
-    else:
-        # Grab em all!
-        for movie_id in movie_ids:
-            if len(movie_data[movie_id][key]) > 0:
-                return_array.append(movie_data[movie_id][key])
-    return np.asarray(return_array)
-
-
 def get_median_length(measure_array):
     length_function = lambda x: len(x)
     vector_function = np.vectorize(length_function)
     return int(np.median(vector_function(measure_array)))
-
-
-def munge_huge_clump(text_array, lower_case=True):
-    log.out.info("Munging records.")
-    if lower_case:
-        return ' '.join(text_array).lower()
-    else:
-        return ' '.join(text_array)
 
 
 def clean_string_to_printable(string_in, lower=True):
@@ -212,17 +276,3 @@ def time_since(start_time):
     m = math.floor(s / 60)
     s -= m * 60
     return '%dm %ds' % (m, s)
-
-# def prepare_nonsense(movie_overview_array, pattern_size=None):
-#     movie_info_raw = munge_huge_clump(movie_overview_array)
-#     # Create mapping of printable chars to integers
-#     sorted_chars = sorted(list(set(printable.lower())))
-#     log.out.info("Cleaning data of weird characters.")
-#     movie_info_clean = clean_string_to_printable(movie_info_raw)
-#     median_overview_length = get_median_length(movie_overview_array)
-#     log.out.info("Median overview length: " + str(median_overview_length))
-#     char_to_int = dict((c, i) for i, c in enumerate(sorted_chars))
-#     num_chars = len(movie_info_clean)
-#     num_vocab = len(sorted_chars)
-#     log.out.info("Total characters: " + str(num_chars) +
-#                  " Total vocabulary: " + str(num_vocab))

@@ -18,8 +18,8 @@ import mythic_common as common
 import mythic_writer_character as writer
 import mythic_model_character as model
 
-
-settings = common.MythicSettings()
+# This is hamfisted but these setting are used so much it's convienient
+settings = common.TrainerSettings()
 
 
 def random_training_set():

@@ -12,8 +12,6 @@ import torch
 import mythic_common as common
 import mythic_model_character
 
-settings = common.MythicSettings()
-
 
 def generate(decoder, seed_string='A', predict_length=100, temperature=0.8, cuda=False):
     hidden = decoder.init_hidden(1)
@@ -51,13 +49,20 @@ if __name__ == '__main__':
     """
     CLI driver to rerun a model prediction
     """
+    # Get settings from command line
+    write_settings = common.WriterSettings()
+    if write_settings.debug:
+        log.out.setLevel('DEBUG')
+    else:
+        log.out.setLevel('INFO')
+
     # Parse command line arguments
-    log.out.info("Loading model from file: " + settings.model_file)
-    decoder = torch.load(settings.model_file)
+    log.out.info("Loading model from file: " + write_settings.model_file)
+    decoder = torch.load(write_settings.model_file)
     predicted_string = generate(decoder,
-                                seed_string=settings.seed_string,
-                                predict_length=settings.predict_length,
-                                temperature=settings.temperature,
-                                cuda=settings.cuda)
-    log.out.info("Seed string: " + "\n" + settings.seed_string)
+                                seed_string=write_settings.seed_string,
+                                predict_length=write_settings.predict_length,
+                                temperature=write_settings.temperature,
+                                cuda=write_settings.cuda)
+    log.out.info("Seed string: " + "\n" + write_settings.seed_string)
     log.out.info("Predicted string: " + "\n" + predicted_string)
